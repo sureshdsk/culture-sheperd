@@ -2,26 +2,16 @@ import { useState, useEffect } from 'react'
 import styles from '../styles/Home.module.css'
 import { Pie, Bar } from 'react-chartjs-2';
 import { supabase } from '../client'
-
-const zeroPad = (num, places) => String(num).padStart(places, '0')
+import { subDays, eachDayOfInterval, format } from 'date-fns';
 
 
 export default function Home() {
   const [todayPie, setTodaysMood] = useState(null)
   const [yesterPie, setYestMood] = useState(null)
   const [lastWeekData, setLastWeekMood] = useState(null)
-  
-  
 
-  let currentDate = new Date()
-  let day = currentDate.getDate()
-  let month = zeroPad(currentDate.getMonth() + 1, 2)
-  let year = currentDate.getFullYear()
-
-  let todayDate = `${year}-${month}-${day}`
-  let yestDate = `${year}-${month}-${day-1}`
-  let tomoDate = `${year}-${month}-${day+1}`
-
+  let today = new Date();
+    
   useEffect(() => {
     fetchTodaysMood()
     fetchYesterdaysMood()
@@ -30,7 +20,7 @@ export default function Home() {
 
   const fetchTodaysMood = async () => {
     let { error, data } = await supabase.from('mood_report').select().filter(
-      'created_dt', 'eq', todayDate
+      'created_dt', 'eq', format(today, "yyyy-MM-dd")
     )
     if (error) {
       console.log(error.message)
@@ -77,7 +67,7 @@ export default function Home() {
 
   const fetchYesterdaysMood = async () => {
     let { error, data } = await supabase.from('mood_report').select().filter(
-      'created_dt', 'eq', yestDate
+      'created_dt', 'eq', format(subDays(today,1), "yyyy-MM-dd")
     )
     if (error) {
       console.log(error.message)
@@ -122,26 +112,25 @@ export default function Home() {
   }
 
   const fetchLastWeeksMood = async () => {
-    const last7dates = [...Array(7)].map((_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-
-      let day = zeroPad(d.getDate(), 2)
-      let month = zeroPad(d.getMonth() + 1, 2)
-      let year = d.getFullYear()
-      return `${year}-${month}-${day}`
-  })
-  const last7days = last7dates.reverse()
+    const aWeekFromNow = subDays(today, 6);
+    const thisWeek = eachDayOfInterval(
+      { start: aWeekFromNow, end: today },
+    );
+    
+    let thisWeekDays =[]
+    for (let d of thisWeek){
+      thisWeekDays.push(format(d, "yyyy-MM-dd"))
+    }
+    
+    console.log(thisWeekDays);
 
     let { error, data } = await supabase.from('mood_report').select().in(
-      'created_dt', last7days
+      'created_dt', thisWeekDays
     ).order('created_dt', {ascending:false})
     if (error) {
       console.log(error.message)
       return
     }
-    console.log('last7dates')
-    console.table(data);
 
     let dataWeek = {sick: [0, 0, 0, 0, 0, 0, 0], 
       sad: [0, 0, 0, 0, 0, 0, 0], 
@@ -151,8 +140,8 @@ export default function Home() {
     
     for (let row of data){
       try {
-        console.log(row, last7days.indexOf(row.created_dt))
-        dataWeek[row.mood][last7days.indexOf(row.created_dt)] += row.count;
+        console.log(row, thisWeekDays.indexOf(row.created_dt))
+        dataWeek[row.mood][thisWeekDays.indexOf(row.created_dt)] += row.count;
       } catch (error) {
         console.error(error)
         console.error(row)
@@ -162,7 +151,7 @@ export default function Home() {
     console.table(dataWeek)
 
     const _lastWeekData = {
-      labels: [...last7days],
+      labels: [...thisWeekDays],
       datasets: [
         {
           label: '# of Sick',
